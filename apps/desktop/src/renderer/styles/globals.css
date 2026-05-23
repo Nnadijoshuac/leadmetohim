@@ -1,0 +1,73 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+* {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  background: transparent;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  color: #f8fafc;
+}
+
+/* Glassmorphism card */
+.glass {
+  background: rgba(12, 12, 18, 0.88);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  box-shadow:
+    0 32px 64px -12px rgba(0, 0, 0, 0.72),
+    0 0 0 1px rgba(255, 255, 255, 0.04),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+/* Gold accent glow */
+.glow-gold {
+  box-shadow: 0 0 20px rgba(251, 191, 36, 0.15);
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 99px;
+}
+
+/* Input reset */
+input {
+  outline: none;
+  background: transparent;
+  border: none;
+  caret-color: #fbbf24;
+}
+
+/* Drag region for frameless window */
+.drag-region {
+  -webkit-app-region: drag;
+}
+.no-drag {
+  -webkit-app-region: no-drag;
+}
+
+/* Confidence bar */
+.confidence-bar {
+  background: linear-gradient(
+    90deg,
+    rgba(251, 191, 36, 0.7) 0%,
+    rgba(245, 158, 11, 0.4) 100%
+  );
+}
