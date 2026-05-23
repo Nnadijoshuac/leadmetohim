@@ -1,4 +1,4 @@
-export const SCHEMA_VERSION = 4;
+export const SCHEMA_VERSION = 5;
 
 export const CREATE_TABLES = `
 PRAGMA journal_mode = WAL;
@@ -44,7 +44,8 @@ CREATE INDEX IF NOT EXISTS idx_verses_lookup
 CREATE VIRTUAL TABLE IF NOT EXISTS verses_fts USING fts5(
   text,
   content=verses,
-  content_rowid=id
+  content_rowid=id,
+  tokenize="porter ascii"
 );
 
 -- Keep FTS5 in sync with verses
