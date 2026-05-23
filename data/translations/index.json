@@ -6,6 +6,34 @@
       "language": "en",
       "source": "ebible",
       "license": "Public Domain"
+    },
+    {
+      "id": "ASV",
+      "name": "American Standard Version (1901)",
+      "language": "en",
+      "source": "ebible",
+      "license": "Public Domain"
+    },
+    {
+      "id": "WEB",
+      "name": "World English Bible",
+      "language": "en",
+      "source": "ebible",
+      "license": "Public Domain"
+    },
+    {
+      "id": "WEBBE",
+      "name": "World English Bible (British Ed.)",
+      "language": "en",
+      "source": "ebible",
+      "license": "Public Domain"
+    },
+    {
+      "id": "RV",
+      "name": "Revised Version (1885)",
+      "language": "en",
+      "source": "ebible",
+      "license": "Public Domain"
     }
   ]
 }
