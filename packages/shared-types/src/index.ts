@@ -43,7 +43,7 @@ export interface SemanticChunk {
 
 // ─── Search ───────────────────────────────────────────────────────────────────
 
-export type QueryType = 'explicit' | 'semantic' | 'hybrid';
+export type QueryType = 'explicit' | 'semantic' | 'hybrid' | 'detected';
 
 export interface SearchQuery {
   raw: string;
@@ -89,6 +89,10 @@ export interface AppSettings {
   semanticThreshold: number;
   topK: number;
   showAlternatives: boolean;
+  /** Continuously listen for scripture in ambient audio */
+  alwaysListening: boolean;
+  /** Confidence threshold (0-1) for auto-showing overlay on detection */
+  detectionThreshold: number;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -105,6 +109,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   semanticThreshold: 0.35,
   topK: 3,
   showAlternatives: true,
+  alwaysListening: true,
+  detectionThreshold: 0.4,
 };
 
 // ─── Overlay state ────────────────────────────────────────────────────────────
@@ -127,25 +133,30 @@ export interface OverlayState {
 // ─── IPC channels ─────────────────────────────────────────────────────────────
 
 export const IPC = {
-  OVERLAY_HIDE: 'overlay:hide',
+  OVERLAY_HIDE:   'overlay:hide',
   OVERLAY_SET_HEIGHT: 'overlay:setHeight',
-  OVERLAY_READY: 'overlay:ready',
+  OVERLAY_READY:  'overlay:ready',
 
   SCRIPTURE_SEARCH: 'scripture:search',
   SCRIPTURE_INSERT: 'scripture:insert',
 
-  SPEECH_START: 'speech:start',
-  SPEECH_STOP: 'speech:stop',
+  SPEECH_START:      'speech:start',
+  SPEECH_STOP:       'speech:stop',
   SPEECH_TRANSCRIPT: 'speech:transcript',
-  SPEECH_ERROR: 'speech:error',
+  SPEECH_ERROR:      'speech:error',
 
-  SETTINGS_GET: 'settings:get',
-  SETTINGS_SET: 'settings:set',
+  // Always-on audio: renderer → main (one-way, fast)
+  AUDIO_FRAME: 'audio:frame',
+  // Main → renderer: scripture auto-detected from ambient audio
+  AUDIO_DETECTION: 'audio:detection',
+
+  SETTINGS_GET:     'settings:get',
+  SETTINGS_SET:     'settings:set',
   SETTINGS_CHANGED: 'settings:changed',
 
   SYSTEM_OPEN_SETTINGS: 'system:openSettings',
-  SYSTEM_VERSION: 'system:version',
-  SYSTEM_MODEL_STATUS: 'system:modelStatus',
+  SYSTEM_VERSION:       'system:version',
+  SYSTEM_MODEL_STATUS:  'system:modelStatus',
 
   HISTORY_ADD: 'history:add',
   HISTORY_GET: 'history:get',
