@@ -1,0 +1,30 @@
+{
+  "name": "@leadmetohim/database",
+  "version": "0.1.0",
+  "private": true,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsup src/index.ts --format esm,cjs --dts --clean --external better-sqlite3",
+    "dev": "tsup src/index.ts --format esm,cjs --dts --watch --external better-sqlite3",
+    "typecheck": "tsc --noEmit",
+    "clean": "rimraf dist"
+  },
+  "dependencies": {
+    "@leadmetohim/shared-types": "workspace:*",
+    "better-sqlite3": "^9.4.3"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.10",
+    "tsup": "^8.0.2",
+    "typescript": "^5.4.5",
+    "rimraf": "^5.0.7"
+  }
+}
