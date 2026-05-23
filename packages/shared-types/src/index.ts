@@ -92,7 +92,7 @@ export interface AppSettings {
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
-  hotkey: 'Alt+Space',
+  hotkey: 'Ctrl+Shift+Space',
   pushToTalkHotkey: 'Alt+R',
   insertMode: 'reference+verse',
   translation: 'KJV',
