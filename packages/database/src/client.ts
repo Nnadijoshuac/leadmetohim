@@ -13,7 +13,7 @@ export function initDatabase(dbPath: string): Database.Database {
   db.exec(CREATE_TABLES);
 
   const row = db
-    .prepare<[], { value: string }>('SELECT value FROM schema_meta WHERE key = ?')
+    .prepare<[string], { value: string }>('SELECT value FROM schema_meta WHERE key = ?')
     .get('version');
 
   const current = row ? parseInt(row.value, 10) : 0;
