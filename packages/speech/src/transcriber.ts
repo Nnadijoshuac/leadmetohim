@@ -49,7 +49,6 @@ async function runWhisper(
   const result = await nodewhisper(audioPath, {
     modelName: model,
     autoDownloadModelName: model,
-    modelPath: modelDir,
     whisperOptions: {
       outputInText: true,
       outputInVtt: false,
@@ -91,7 +90,6 @@ export async function downloadWhisperModel(
     await nodewhisper(tmpFile, {
       modelName: model,
       autoDownloadModelName: model,
-      modelPath: modelDir,
       whisperOptions: { outputInText: true },
     });
   } catch {
