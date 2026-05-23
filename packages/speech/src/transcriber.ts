@@ -1,13 +1,17 @@
 import path from 'path';
 import fs from 'fs';
-import os from 'os';
 
 export type WhisperModel = 'tiny.en' | 'base.en' | 'small.en';
+
+const XENOVA_MODEL_IDS: Record<WhisperModel, string> = {
+  'tiny.en': 'Xenova/whisper-tiny.en',
+  'base.en': 'Xenova/whisper-base.en',
+  'small.en': 'Xenova/whisper-small.en',
+};
 
 export interface TranscribeOptions {
   modelDir: string;
   model?: WhisperModel;
-  language?: string;
 }
 
 export interface TranscribeResult {
@@ -15,119 +19,83 @@ export interface TranscribeResult {
   durationMs: number;
 }
 
-/**
- * Transcribe a WAV audio buffer using nodejs-whisper (whisper.cpp wrapper).
- * The audio must be 16kHz, 16-bit, mono PCM WAV.
- */
-export async function transcribeBuffer(
-  audioBuffer: Buffer,
-  opts: TranscribeOptions,
-): Promise<TranscribeResult> {
-  const model = opts.model ?? 'tiny.en';
-  const t0 = Date.now();
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type XenovaPipeline = (input: Float32Array | string, options?: Record<string, unknown>) => Promise<{ text: string }>;
 
-  // Write buffer to a temp WAV file — whisper.cpp requires a file path
-  const tmpFile = path.join(os.tmpdir(), `ltm-audio-${Date.now()}.wav`);
-  fs.writeFileSync(tmpFile, audioBuffer);
+let _pipe: XenovaPipeline | null = null;
+let _loadedModel: WhisperModel | null = null;
 
-  try {
-    const text = await runWhisper(tmpFile, model, opts.modelDir);
-    return { text: text.trim(), durationMs: Date.now() - t0 };
-  } finally {
-    try { fs.unlinkSync(tmpFile); } catch { /* ignore */ }
-  }
-}
-
-async function runWhisper(
-  audioPath: string,
+async function getPipeline(
   model: WhisperModel,
-  modelDir: string,
-): Promise<string> {
-  // Dynamic import so electron-builder can handle native module
-  const { nodewhisper } = await import('nodejs-whisper');
+  cacheDir: string,
+  onProgress?: (pct: number) => void,
+): Promise<XenovaPipeline> {
+  if (_pipe && _loadedModel === model) return _pipe;
 
-  const result = await nodewhisper(audioPath, {
-    modelName: model,
-    autoDownloadModelName: model,
-    whisperOptions: {
-      outputInText: true,
-      outputInVtt: false,
-      outputInSrt: false,
-      outputInCsv: false,
-      translateToEnglish: false,
-      language: 'en',
-      wordTimestamps: false,
-      timestamps_length: 60,
-      splitOnWord: true,
+  const { pipeline, env } = await import('@xenova/transformers');
+  env.cacheDir = cacheDir;
+  env.allowRemoteModels = true;
+  env.allowLocalModels = true;
+
+  const modelId = XENOVA_MODEL_IDS[model];
+
+  const pipe = await pipeline('automatic-speech-recognition', modelId, {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    progress_callback: (info: any) => {
+      if (info?.status === 'downloading' && typeof info.total === 'number' && info.total > 0) {
+        onProgress?.(Math.round((info.loaded / info.total) * 100));
+      }
     },
   });
 
-  if (typeof result === 'string') return result;
-  if (Array.isArray(result)) return (result as string[]).join(' ');
-  return '';
+  _pipe = pipe as unknown as XenovaPipeline;
+  _loadedModel = model;
+  return _pipe;
 }
 
-/**
- * Download a Whisper model to modelDir.
- * Progress callback receives 0–100.
- */
+export function isWhisperModelPresent(model: WhisperModel, modelDir: string): boolean {
+  const modelId = XENOVA_MODEL_IDS[model] ?? XENOVA_MODEL_IDS['tiny.en'];
+  // Xenova caches models as: {cacheDir}/models--{org}--{name}/snapshots/
+  const cacheKey = `models--${modelId.replace('/', '--')}`;
+  return fs.existsSync(path.join(modelDir, cacheKey, 'snapshots'));
+}
+
+/** Download (or verify) the Whisper model. Returns when the model is ready. */
 export async function downloadWhisperModel(
   model: WhisperModel,
   modelDir: string,
   onProgress?: (pct: number) => void,
 ): Promise<void> {
-  if (!fs.existsSync(modelDir)) fs.mkdirSync(modelDir, { recursive: true });
+  await getPipeline(model, modelDir, onProgress);
+}
 
-  const { nodewhisper } = await import('nodejs-whisper');
+/** Transcribe a 16 kHz mono Float32Array. Zero-copy path from always-on audio. */
+export async function transcribeFloat32(
+  pcm: Float32Array,
+  opts: TranscribeOptions,
+): Promise<TranscribeResult> {
+  const model = opts.model ?? 'tiny.en';
+  const pipe = await getPipeline(model, opts.modelDir);
 
-  // Trigger a silent transcription of an empty file to force model download
-  const emptyWav = createSilentWav(0.1);
-  const tmpFile = path.join(os.tmpdir(), `ltm-init-${Date.now()}.wav`);
-  fs.writeFileSync(tmpFile, emptyWav);
+  const t0 = Date.now();
+  const result = await pipe(pcm, { sampling_rate: 16000, language: 'english', task: 'transcribe' });
+  return { text: result.text?.trim() ?? '', durationMs: Date.now() - t0 };
+}
 
-  onProgress?.(5);
-  try {
-    await nodewhisper(tmpFile, {
-      modelName: model,
-      autoDownloadModelName: model,
-      whisperOptions: { outputInText: true },
-    });
-  } catch {
-    // Model might not exist yet — that's expected on first run
-  } finally {
-    try { fs.unlinkSync(tmpFile); } catch { /* ignore */ }
+/** Transcribe a standard 16 kHz 16-bit mono PCM WAV buffer (for PTT compatibility). */
+export async function transcribeBuffer(
+  audioBuffer: Buffer,
+  opts: TranscribeOptions,
+): Promise<TranscribeResult> {
+  return transcribeFloat32(wavToFloat32(audioBuffer), opts);
+}
+
+function wavToFloat32(buf: Buffer): Float32Array {
+  const dataStart = 44; // standard PCM WAV header
+  const numSamples = (buf.length - dataStart) / 2;
+  const out = new Float32Array(numSamples);
+  for (let i = 0; i < numSamples; i++) {
+    out[i] = buf.readInt16LE(dataStart + i * 2) / 32768;
   }
-  onProgress?.(100);
-}
-
-export function isWhisperModelPresent(model: WhisperModel, modelDir: string): boolean {
-  const candidates = [
-    path.join(modelDir, `ggml-${model}.bin`),
-    path.join(modelDir, `ggml-model-whisper-${model}.bin`),
-  ];
-  return candidates.some((p) => fs.existsSync(p));
-}
-
-/** Create a minimal silent WAV buffer (16kHz, 16-bit, mono). */
-function createSilentWav(durationSeconds: number): Buffer {
-  const sampleRate = 16000;
-  const numSamples = Math.floor(sampleRate * durationSeconds);
-  const dataBytes = numSamples * 2;
-  const buf = Buffer.alloc(44 + dataBytes, 0);
-
-  buf.write('RIFF', 0);
-  buf.writeUInt32LE(36 + dataBytes, 4);
-  buf.write('WAVE', 8);
-  buf.write('fmt ', 12);
-  buf.writeUInt32LE(16, 16);
-  buf.writeUInt16LE(1, 20);   // PCM
-  buf.writeUInt16LE(1, 22);   // mono
-  buf.writeUInt32LE(sampleRate, 24);
-  buf.writeUInt32LE(sampleRate * 2, 28); // byte rate
-  buf.writeUInt16LE(2, 32);   // block align
-  buf.writeUInt16LE(16, 34);  // bits per sample
-  buf.write('data', 36);
-  buf.writeUInt32LE(dataBytes, 40);
-
-  return buf;
+  return out;
 }

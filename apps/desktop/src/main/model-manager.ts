@@ -16,12 +16,16 @@ export function getEmbedderCacheDir(): string {
 }
 
 let _status: ModelStatus = {
-  whisper: 'missing',
+  whisper:  'missing',
   embedder: 'missing',
 };
 
 export function getModelStatus(): ModelStatus {
   return { ..._status };
+}
+
+export function isWhisperReady(): boolean {
+  return _status.whisper === 'ready';
 }
 
 function broadcast(win: BrowserWindow | null | undefined): void {
@@ -34,7 +38,7 @@ export async function initModels(
   settings: AppSettings,
   statusWindow?: BrowserWindow | null,
 ): Promise<void> {
-  const modelsDir = getModelsDir();
+  const modelsDir    = getModelsDir();
   const embedderCache = getEmbedderCacheDir();
 
   // ── Embedder ────────────────────────────────────────────────────────────
@@ -63,26 +67,23 @@ export async function initModels(
     _status.embedder = 'ready';
   }
 
-  // ── Whisper ─────────────────────────────────────────────────────────────
+  // ── Whisper (via @xenova/transformers ONNX — no binary path issues) ─────
   const model = settings.whisperModel;
-  if (!isWhisperModelPresent(model, modelsDir)) {
-    _status.whisper = 'downloading';
-    broadcast(statusWindow);
 
-    try {
-      await downloadWhisperModel(model, modelsDir, (pct) => {
-        _status.whisperProgress = pct;
-        broadcast(statusWindow);
-      });
-      _status.whisper = 'ready';
-      _status.whisperProgress = undefined;
-      log.info(`Whisper model "${model}" ready`);
-    } catch (e) {
-      _status.whisper = 'error';
-      log.error('Failed to download Whisper model:', e);
-    }
-  } else {
+  _status.whisper = 'downloading';
+  broadcast(statusWindow);
+
+  try {
+    await downloadWhisperModel(model, modelsDir, (pct) => {
+      _status.whisperProgress = pct;
+      broadcast(statusWindow);
+    });
     _status.whisper = 'ready';
+    _status.whisperProgress = undefined;
+    log.info(`Whisper model "${model}" ready`);
+  } catch (e) {
+    _status.whisper = 'error';
+    log.error('Failed to load Whisper model:', e);
   }
 
   broadcast(statusWindow);

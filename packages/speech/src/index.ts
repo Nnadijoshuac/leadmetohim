@@ -1,5 +1,6 @@
 export {
   transcribeBuffer,
+  transcribeFloat32,
   downloadWhisperModel,
   isWhisperModelPresent,
 } from './transcriber.js';
