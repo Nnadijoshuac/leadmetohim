@@ -1,0 +1,52 @@
+appId: com.leadmetohim.app
+productName: LeadMeToHim
+copyright: "Copyright © 2024 LeadMeToHim"
+
+directories:
+  output: release
+  buildResources: build
+
+files:
+  - out/**/*
+  - "!out/**/*.map"
+
+extraResources:
+  - from: "../../data/leadmetohim-seed.db"
+    to: "data/leadmetohim-seed.db"
+  - from: "../../data/semantic-chunks.json"
+    to: "data/semantic-chunks.json"
+
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+    - target: portable
+      arch: [x64]
+  icon: build/icon.ico
+  requestedExecutionLevel: asInvoker
+  verifyUpdateCodeSignature: false
+
+nsis:
+  oneClick: false
+  allowElevation: false
+  allowToChangeInstallationDirectory: true
+  installerIcon: build/icon.ico
+  uninstallerIcon: build/icon.ico
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: LeadMeToHim
+  include: build/installer.nsh
+
+portable:
+  artifactName: "${productName}-${version}-portable.exe"
+
+asar: true
+asarUnpack:
+  - "**/node_modules/better-sqlite3/**"
+  - "**/node_modules/nodejs-whisper/**"
+  - "**/node_modules/@xenova/**"
+  - "**/data/**"
+
+publish: null
+
+electronVersion: "30.0.6"

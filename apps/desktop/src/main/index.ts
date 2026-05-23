@@ -62,7 +62,7 @@ app.whenReady().then(async () => {
   // ── Hotkeys ──────────────────────────────────────────────────────────────
   registerHotkeys(settings.hotkey, settings.pushToTalkHotkey, onPTTStart, onPTTStop);
 
-  // ── AI models (background init) ──────────────────────────────────────────
+  // ── Local models (background init) ───────────────────────────────────────
   initModels(settings, overlayWin).catch((e) => {
     log.error('Model init error:', e);
   });

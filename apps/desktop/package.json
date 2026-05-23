@@ -2,7 +2,7 @@
   "name": "@leadmetohim/desktop",
   "version": "0.1.0",
   "private": true,
-  "description": "LeadMeToHim — AI Scripture Copilot for Windows",
+  "description": "LeadMeToHim - Scripture Copilot for Windows",
   "author": {
     "name": "LeadMeToHim",
     "email": "godspowerojini8@gmail.com"
@@ -38,6 +38,7 @@
     "autoprefixer": "^10.4.19",
     "electron": "^30.0.6",
     "electron-builder": "^24.13.3",
+    "@vitejs/plugin-react": "^4.3.1",
     "electron-vite": "^2.2.0",
     "framer-motion": "^11.2.10",
     "postcss": "^8.4.38",

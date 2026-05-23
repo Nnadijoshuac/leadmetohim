@@ -27,7 +27,7 @@ export function Settings() {
   const TABS: { id: Tab; label: string }[] = [
     { id: 'general', label: 'General' },
     { id: 'hotkeys', label: 'Hotkeys' },
-    { id: 'models', label: 'AI Models' },
+    { id: 'models', label: 'Local Models' },
   ];
 
   return (
