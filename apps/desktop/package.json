@@ -23,7 +23,7 @@
     "@leadmetohim/scripture-engine": "workspace:*",
     "@leadmetohim/vector-search": "workspace:*",
     "@leadmetohim/speech": "workspace:*",
-    "better-sqlite3": "^9.4.3",
+    "better-sqlite3": "^11.5.0",
     "electron-updater": "^6.1.8",
     "nodejs-whisper": "^0.1.18",
     "@xenova/transformers": "^2.17.2"

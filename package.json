@@ -3,17 +3,20 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "turbo dev",
-    "build": "turbo build",
-    "build:desktop": "turbo build --filter=@leadmetohim/desktop",
-    "package": "turbo build --filter=@leadmetohim/desktop && pnpm --filter @leadmetohim/desktop package",
-    "seed": "tsx scripts/seed-bible.ts",
-    "embeddings": "tsx scripts/generate-embeddings.ts",
-    "models": "tsx scripts/download-models.ts",
-    "prepare": "pnpm models && pnpm seed && pnpm embeddings",
-    "lint": "turbo lint",
-    "typecheck": "turbo typecheck",
-    "clean": "turbo clean && rimraf node_modules"
+    "dev": "pnpm exec turbo dev",
+    "build": "pnpm exec turbo build",
+    "build:desktop": "pnpm exec turbo build --filter=@leadmetohim/desktop",
+    "package": "pnpm exec turbo build --filter=@leadmetohim/desktop && pnpm --filter @leadmetohim/desktop package",
+    "seed": "pnpm exec tsx scripts/seed-bible.ts",
+    "embeddings": "pnpm exec tsx scripts/generate-embeddings.ts",
+    "models": "pnpm exec tsx scripts/download-models.ts",
+    "rebuild": "pnpm --filter @leadmetohim/desktop exec electron-rebuild -f -w better-sqlite3 nodejs-whisper",
+    "lint": "pnpm exec turbo lint",
+    "typecheck": "pnpm exec turbo typecheck",
+    "clean": "pnpm exec turbo clean && rimraf node_modules"
+  },
+  "pnpm": {
+    "neverBuiltDependencies": ["better-sqlite3", "nodejs-whisper"]
   },
   "devDependencies": {
     "turbo": "^2.0.0",
