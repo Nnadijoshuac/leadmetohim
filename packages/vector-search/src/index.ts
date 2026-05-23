@@ -3,7 +3,7 @@ import type { SearchResult } from '@leadmetohim/shared-types';
 import { getAllEmbeddings, getChunkById } from '@leadmetohim/database';
 import { buildSearchResult } from '@leadmetohim/scripture-engine';
 import { embed, loadEmbedder, embedBatch, isEmbedderLoaded, getModelId } from './embedder.js';
-import { topK, normalizeVector } from './similarity.js';
+import { topK } from './similarity.js';
 
 export { loadEmbedder, embed, embedBatch, isEmbedderLoaded, getModelId };
 export { cosineSimilarity, normalizeVector, topK } from './similarity.js';
@@ -72,5 +72,3 @@ export async function semanticSearch(
 
   return buildSearchResult(db, scored, 'semantic', translation);
 }
-
-export { normalizeVector };
