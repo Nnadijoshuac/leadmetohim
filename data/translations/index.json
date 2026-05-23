@@ -1,0 +1,11 @@
+{
+  "translations": [
+    {
+      "id": "KJV",
+      "name": "King James Version (1769)",
+      "language": "en",
+      "source": "ebible",
+      "license": "Public Domain"
+    }
+  ]
+}
