@@ -1,20 +1,100 @@
-import { app, session } from 'electron';
+import { app, session, ipcMain } from 'electron';
 import path from 'path';
+import fs from 'fs';
 import { log } from './logger.js';
-import { createOverlayWindow, createSettingsWindow } from './window-manager.js';
+import { createOverlayWindow } from './window-manager.js';
 import { createTray, destroyTray } from './tray-manager.js';
 import { registerHotkeys, unregisterAll } from './hotkey-manager.js';
 import { setupIpcHandlers, handleAudioBuffer } from './ipc-handlers.js';
 import { initModels } from './model-manager.js';
-import { initDatabase, getAllSettings, loadVectorIndex } from '@leadmetohim/database';
-import { ipcMain } from 'electron';
-import { IPC } from '@leadmetohim/shared-types';
+import {
+  initDatabase,
+  getAllSettings,
+  bulkUpsertChunks,
+  bulkInsertVerses,
+  getChunksWithoutEmbeddings,
+  upsertEmbedding,
+} from '@leadmetohim/database';
+import { BIBLE_BOOKS } from '@leadmetohim/scripture-engine';
+import { embed, getModelId, loadVectorIndex } from '@leadmetohim/vector-search';
 
 // ── Single instance lock ──────────────────────────────────────────────────────
 
 if (!app.requestSingleInstanceLock()) {
   app.quit();
   process.exit(0);
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function getDataDir(): string {
+  if (app.isPackaged) {
+    return path.join(process.resourcesPath, 'data');
+  }
+  // Dev: apps/desktop → ../../data
+  return path.resolve(app.getAppPath(), '../../data');
+}
+
+type Db = ReturnType<typeof initDatabase>;
+
+function seedIfNeeded(db: Db, dataDir: string): void {
+  const { n } = db.prepare('SELECT COUNT(*) as n FROM books').get() as { n: number };
+  if (n > 0) return;
+
+  log.info('First run — seeding database from bundled data files');
+
+  const insertBook = db.prepare(
+    `INSERT OR REPLACE INTO books (id, name, short_name, aliases, testament, chapters)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+  );
+  db.transaction(() => {
+    for (const book of BIBLE_BOOKS) {
+      insertBook.run(book.id, book.name, book.shortName, JSON.stringify(book.aliases), book.testament, book.chapters);
+    }
+  })();
+  log.info(`Seeded ${BIBLE_BOOKS.length} books`);
+
+  const chunksPath = path.join(dataDir, 'semantic-chunks.json');
+  if (fs.existsSync(chunksPath)) {
+    const chunks = JSON.parse(fs.readFileSync(chunksPath, 'utf8'));
+    bulkUpsertChunks(db, chunks);
+    log.info(`Seeded ${chunks.length} semantic chunks`);
+  } else {
+    log.warn('semantic-chunks.json not found — skipping chunks');
+  }
+
+  const featuredPath = path.join(dataDir, 'featured-verses.json');
+  if (fs.existsSync(featuredPath)) {
+    const { verses, translation } = JSON.parse(fs.readFileSync(featuredPath, 'utf8'));
+    const bookMap = new Map(BIBLE_BOOKS.map((b) => [b.id, b.name]));
+    const mapped = (verses as { bookId: number; chapter: number; verse: number; text: string }[]).map((v) => ({
+      bookId: v.bookId,
+      bookName: bookMap.get(v.bookId) ?? '',
+      chapter: v.chapter,
+      verse: v.verse,
+      text: v.text,
+      translation: (translation as string) ?? 'KJV',
+    }));
+    bulkInsertVerses(db, mapped);
+    log.info(`Seeded ${mapped.length} featured verses`);
+  }
+}
+
+async function generateEmbeddingsIfNeeded(db: Db): Promise<void> {
+  const chunks = getChunksWithoutEmbeddings(db);
+  if (chunks.length === 0) return;
+
+  log.info(`Generating embeddings for ${chunks.length} chunks…`);
+  const model = getModelId();
+  for (const chunk of chunks) {
+    try {
+      const vector = await embed(chunk.text);
+      upsertEmbedding(db, chunk.id, vector, model);
+    } catch (e) {
+      log.warn(`Embed failed for chunk ${chunk.id}:`, e);
+    }
+  }
+  log.info('Embeddings complete');
 }
 
 // ── App lifecycle ─────────────────────────────────────────────────────────────
@@ -27,6 +107,9 @@ app.whenReady().then(async () => {
   const db = initDatabase(dbPath);
   log.info(`Database ready: ${dbPath}`);
 
+  // ── First-run seed ────────────────────────────────────────────────────────
+  seedIfNeeded(db, getDataDir());
+
   const settings = getAllSettings(db);
 
   // ── Microphone permission ────────────────────────────────────────────────
@@ -36,21 +119,16 @@ app.whenReady().then(async () => {
   });
 
   // ── IPC ──────────────────────────────────────────────────────────────────
-  let isRecording = false;
-
   function onPTTStart(): void {
-    isRecording = true;
     overlayWin?.webContents.send('speech:startRecording');
   }
 
   function onPTTStop(): void {
-    isRecording = false;
     overlayWin?.webContents.send('speech:stopRecording');
   }
 
   setupIpcHandlers(db, onPTTStart, onPTTStop);
 
-  // Audio buffer from renderer
   ipcMain.handle('speech:audioBuffer', async (event, buffer: Buffer) => {
     await handleAudioBuffer(buffer, event.sender);
   });
@@ -62,20 +140,20 @@ app.whenReady().then(async () => {
   // ── Hotkeys ──────────────────────────────────────────────────────────────
   registerHotkeys(settings.hotkey, settings.pushToTalkHotkey, onPTTStart, onPTTStop);
 
-  // ── Local models (background init) ───────────────────────────────────────
-  initModels(settings, overlayWin).catch((e) => {
-    log.error('Model init error:', e);
-  });
-
-  // Pre-load vector index once models are ready
-  setTimeout(() => {
-    try {
-      loadVectorIndex(db);
-      log.info('Vector index pre-loaded');
-    } catch (e) {
-      log.warn('Vector index pre-load failed (will retry on first search):', e);
-    }
-  }, 3000);
+  // ── Local models → embeddings → vector index (background) ────────────────
+  initModels(settings, overlayWin)
+    .then(async () => {
+      await generateEmbeddingsIfNeeded(db);
+      try {
+        loadVectorIndex(db);
+        log.info('Vector index ready');
+      } catch (e) {
+        log.warn('Vector index load failed:', e);
+      }
+    })
+    .catch((e) => {
+      log.error('Model init error:', e);
+    });
 
   log.info('App ready');
 });
