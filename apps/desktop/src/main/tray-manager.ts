@@ -5,6 +5,8 @@ import { showOverlay, createSettingsWindow } from './window-manager.js';
 import { log } from './logger.js';
 
 let tray: Tray | null = null;
+let _listening = true;
+let _onToggleListening: ((enabled: boolean) => void) | null = null;
 
 function getTrayIcon(): Electron.NativeImage {
   const candidates = [
@@ -21,19 +23,26 @@ function getTrayIcon(): Electron.NativeImage {
     }
   }
 
-  // Fallback: programmatic 16×16 icon (white cross on transparent)
   return nativeImage.createFromDataURL(createFallbackIconDataUrl());
 }
 
-export function createTray(): Tray {
-  tray = new Tray(getTrayIcon());
-  tray.setToolTip('LeadMeToHim — Scripture Copilot');
-
-  const menu = Menu.buildFromTemplate([
+function buildMenu(): Electron.Menu {
+  return Menu.buildFromTemplate([
     {
       label: 'Search Scripture',
       accelerator: 'Alt+Space',
       click: () => showOverlay(),
+    },
+    { type: 'separator' },
+    {
+      label: _listening ? 'Pause Listening' : 'Resume Listening',
+      click: () => {
+        _listening = !_listening;
+        _onToggleListening?.(_listening);
+        tray?.setContextMenu(buildMenu());
+        tray?.setToolTip(`LeadMeToHim — ${_listening ? 'Listening' : 'Paused'}`);
+        log.info(`Always-on listening ${_listening ? 'resumed' : 'paused'}`);
+      },
     },
     { type: 'separator' },
     {
@@ -51,12 +60,23 @@ export function createTray(): Tray {
       click: () => app.quit(),
     },
   ]);
+}
 
-  tray.setContextMenu(menu);
+export function createTray(onToggleListening: (enabled: boolean) => void): Tray {
+  _onToggleListening = onToggleListening;
+  tray = new Tray(getTrayIcon());
+  tray.setToolTip('LeadMeToHim — Listening');
+  tray.setContextMenu(buildMenu());
   tray.on('double-click', () => showOverlay());
-
   log.info('Tray created');
   return tray;
+}
+
+/** Sync tray state when listening is toggled from outside (e.g. settings window). */
+export function setTrayListeningState(listening: boolean): void {
+  _listening = listening;
+  tray?.setContextMenu(buildMenu());
+  tray?.setToolTip(`LeadMeToHim — ${listening ? 'Listening' : 'Paused'}`);
 }
 
 export function destroyTray(): void {

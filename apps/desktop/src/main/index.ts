@@ -5,7 +5,7 @@ import { log } from './logger.js';
 import { createOverlayWindow } from './window-manager.js';
 import { createTray, destroyTray } from './tray-manager.js';
 import { registerHotkeys, unregisterAll } from './hotkey-manager.js';
-import { setupIpcHandlers, handleAudioBuffer } from './ipc-handlers.js';
+import { setupIpcHandlers, handleAudioBuffer, setAlwaysListening } from './ipc-handlers.js';
 import { initModels } from './model-manager.js';
 import {
   initDatabase,
@@ -123,6 +123,7 @@ function importTranslationFiles(db: Db, dataDir: string): void {
     totalImported += rows.length;
     newTranslations++;
     log.info(`Imported ${rows.length.toLocaleString()} verses for ${meta.id} (${meta.name})`);
+    try { fs.unlinkSync(ndjsonPath); } catch { /* not critical */ }
   }
 
   if (newTranslations > 0) {
@@ -187,7 +188,7 @@ app.whenReady().then(async () => {
 
   // ── Windows & Tray ───────────────────────────────────────────────────────
   const overlayWin = createOverlayWindow();
-  createTray();
+  createTray((enabled) => setAlwaysListening(enabled));
 
   // ── Hotkeys ──────────────────────────────────────────────────────────────
   registerHotkeys(settings.hotkey, settings.pushToTalkHotkey, onPTTStart, onPTTStop);

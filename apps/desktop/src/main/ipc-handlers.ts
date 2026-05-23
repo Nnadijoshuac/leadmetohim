@@ -21,6 +21,7 @@ import {
   getOverlayWindow,
 } from './window-manager.js';
 import { updateHotkey } from './hotkey-manager.js';
+import { setTrayListeningState } from './tray-manager.js';
 import { insertText } from './text-inserter.js';
 import { getModelsDir, getModelStatus, isWhisperReady } from './model-manager.js';
 import { AudioListener } from './audio-listener.js';
@@ -30,6 +31,9 @@ let _db: Database.Database;
 let _onPTTStart: () => void = () => undefined;
 let _onPTTStop: () => void  = () => undefined;
 let _listener: AudioListener | null = null;
+
+const DETECTION_COOLDOWN_MS = 10_000;
+let _lastDetectionTime = 0;
 
 // ── Setup ─────────────────────────────────────────────────────────────────────
 
@@ -107,9 +111,20 @@ async function handleUtterance(pcm: Float32Array): Promise<void> {
     if (matches.length === 0) return;
 
     const best = matches[0]!;
-    // Only surface if confidence is meaningful (BM25 rank is negative; stronger = more negative)
-    const confidence = Math.min(1, Math.abs(best.score) / 8);
+    // Gap-based confidence: strength (absolute BM25) × dominance (how much #1 beats #2)
+    const s1 = Math.abs(best.score);
+    const s2 = matches.length > 1 ? Math.abs(matches[1]!.score) : 0;
+    const strength = Math.min(1, s1 / 10);
+    const gap = s1 + s2 > 0 ? (s1 - s2) / (s1 + s2) : 1;
+    const confidence = Math.min(1, strength * (0.7 + 0.3 * gap));
     if (confidence < settings.detectionThreshold) return;
+
+    const now = Date.now();
+    if (now - _lastDetectionTime < DETECTION_COOLDOWN_MS) {
+      log.info('[Listen] Detection suppressed (10s cooldown)');
+      return;
+    }
+    _lastDetectionTime = now;
 
     log.info(`[Listen] Scripture detected: ${best.verse.bookName} ${best.verse.chapter}:${best.verse.verse} (conf ${confidence.toFixed(2)})`);
 
@@ -132,7 +147,7 @@ async function handleUtterance(pcm: Float32Array): Promise<void> {
           verseStart:   m.verse.verse,
           display:      `${m.verse.bookName} ${m.verse.chapter}:${m.verse.verse}`,
         },
-        confidence: Math.min(1, Math.abs(m.score) / 8),
+        confidence: Math.min(1, Math.abs(m.score) / 10),
       })),
     };
 
@@ -225,6 +240,7 @@ async function handleSettingsSet(
 
   if (partial.alwaysListening !== undefined) {
     setAlwaysListening(partial.alwaysListening);
+    setTrayListeningState(partial.alwaysListening);
   }
 }
 
