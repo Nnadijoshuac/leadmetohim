@@ -12,7 +12,7 @@ export default defineConfig({
     },
     build: {
       rollupOptions: {
-        external: ['better-sqlite3', 'nodejs-whisper'],
+        external: ['better-sqlite3', 'nodejs-whisper', '@nut-tree/nut-js'],
       },
     },
   },
