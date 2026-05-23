@@ -14,6 +14,8 @@ import {
   bulkInsertVerses,
   getChunksWithoutEmbeddings,
   upsertEmbedding,
+  upsertTranslation,
+  rebuildFTS5,
 } from '@leadmetohim/database';
 import { BIBLE_BOOKS } from '@leadmetohim/scripture-engine';
 import { embed, getModelId, loadVectorIndex } from '@leadmetohim/vector-search';
@@ -39,44 +41,94 @@ type Db = ReturnType<typeof initDatabase>;
 
 function seedIfNeeded(db: Db, dataDir: string): void {
   const { n } = db.prepare('SELECT COUNT(*) as n FROM books').get() as { n: number };
-  if (n > 0) return;
+  const isFirstRun = n === 0;
 
-  log.info('First run — seeding database from bundled data files');
+  if (isFirstRun) {
+    log.info('First run — seeding database from bundled data files');
 
-  const insertBook = db.prepare(
-    `INSERT OR REPLACE INTO books (id, name, short_name, aliases, testament, chapters)
-     VALUES (?, ?, ?, ?, ?, ?)`,
-  );
-  db.transaction(() => {
-    for (const book of BIBLE_BOOKS) {
-      insertBook.run(book.id, book.name, book.shortName, JSON.stringify(book.aliases), book.testament, book.chapters);
+    const insertBook = db.prepare(
+      `INSERT OR REPLACE INTO books (id, name, short_name, aliases, testament, chapters)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+    );
+    db.transaction(() => {
+      for (const book of BIBLE_BOOKS) {
+        insertBook.run(book.id, book.name, book.shortName, JSON.stringify(book.aliases), book.testament, book.chapters);
+      }
+    })();
+    log.info(`Seeded ${BIBLE_BOOKS.length} books`);
+
+    const chunksPath = path.join(dataDir, 'semantic-chunks.json');
+    if (fs.existsSync(chunksPath)) {
+      const chunks = JSON.parse(fs.readFileSync(chunksPath, 'utf8'));
+      bulkUpsertChunks(db, chunks);
+      log.info(`Seeded ${chunks.length} semantic chunks`);
+    } else {
+      log.warn('semantic-chunks.json not found — skipping chunks');
     }
-  })();
-  log.info(`Seeded ${BIBLE_BOOKS.length} books`);
 
-  const chunksPath = path.join(dataDir, 'semantic-chunks.json');
-  if (fs.existsSync(chunksPath)) {
-    const chunks = JSON.parse(fs.readFileSync(chunksPath, 'utf8'));
-    bulkUpsertChunks(db, chunks);
-    log.info(`Seeded ${chunks.length} semantic chunks`);
-  } else {
-    log.warn('semantic-chunks.json not found — skipping chunks');
+    const featuredPath = path.join(dataDir, 'featured-verses.json');
+    if (fs.existsSync(featuredPath)) {
+      const { verses, translation } = JSON.parse(fs.readFileSync(featuredPath, 'utf8'));
+      const bookMap = new Map(BIBLE_BOOKS.map((b) => [b.id, b.name]));
+      const mapped = (verses as { bookId: number; chapter: number; verse: number; text: string }[]).map((v) => ({
+        bookId: v.bookId,
+        bookName: bookMap.get(v.bookId) ?? '',
+        chapter: v.chapter,
+        verse: v.verse,
+        text: v.text,
+        translation: (translation as string) ?? 'KJV',
+      }));
+      bulkInsertVerses(db, mapped);
+      log.info(`Seeded ${mapped.length} featured verses`);
+    }
   }
 
-  const featuredPath = path.join(dataDir, 'featured-verses.json');
-  if (fs.existsSync(featuredPath)) {
-    const { verses, translation } = JSON.parse(fs.readFileSync(featuredPath, 'utf8'));
-    const bookMap = new Map(BIBLE_BOOKS.map((b) => [b.id, b.name]));
-    const mapped = (verses as { bookId: number; chapter: number; verse: number; text: string }[]).map((v) => ({
-      bookId: v.bookId,
-      bookName: bookMap.get(v.bookId) ?? '',
-      chapter: v.chapter,
-      verse: v.verse,
-      text: v.text,
-      translation: (translation as string) ?? 'KJV',
-    }));
-    bulkInsertVerses(db, mapped);
-    log.info(`Seeded ${mapped.length} featured verses`);
+  // Import any downloaded translation NDJSON files (runs every launch, skips already-imported)
+  importTranslationFiles(db, dataDir);
+}
+
+function importTranslationFiles(db: Db, dataDir: string): void {
+  const transDir = path.join(dataDir, 'translations');
+  const indexFile = path.join(transDir, 'index.json');
+  if (!fs.existsSync(indexFile)) return;
+
+  type IndexEntry = { id: string; name: string; language: string; source: string; license: string };
+  const { translations } = JSON.parse(fs.readFileSync(indexFile, 'utf8')) as { translations: IndexEntry[] };
+  const bookMap = new Map(BIBLE_BOOKS.map((b) => [b.id, b.name]));
+
+  let totalImported = 0;
+  let newTranslations = 0;
+
+  const existing = db
+    .prepare<[], { translation: string }>('SELECT DISTINCT translation FROM verses')
+    .all()
+    .map((r) => r.translation);
+  const existingSet = new Set(existing);
+
+  for (const meta of translations) {
+    if (existingSet.has(meta.id)) continue; // already imported
+
+    const ndjsonPath = path.join(transDir, `${meta.id}.ndjson`);
+    if (!fs.existsSync(ndjsonPath)) continue;
+
+    upsertTranslation(db, meta);
+
+    const lines = fs.readFileSync(ndjsonPath, 'utf8').split('\n').filter(Boolean);
+    const rows = lines.map((line) => {
+      const { b, c, v, t } = JSON.parse(line) as { b: number; c: number; v: number; t: string };
+      return { bookId: b, bookName: bookMap.get(b) ?? '', chapter: c, verse: v, text: t, translation: meta.id };
+    });
+
+    bulkInsertVerses(db, rows);
+    totalImported += rows.length;
+    newTranslations++;
+    log.info(`Imported ${rows.length.toLocaleString()} verses for ${meta.id} (${meta.name})`);
+  }
+
+  if (newTranslations > 0) {
+    log.info(`Rebuilding FTS5 index after importing ${newTranslations} new translations…`);
+    rebuildFTS5(db);
+    log.info('FTS5 rebuild complete');
   }
 }
 

@@ -60,7 +60,7 @@ export function setupIpcHandlers(
   ipcMain.handle(IPC.SETTINGS_SET, handleSettingsSet);
 
   // System
-  ipcMain.handle(IPC.SYSTEM_OPEN_SETTINGS, () => createSettingsWindow());
+  ipcMain.handle(IPC.SYSTEM_OPEN_SETTINGS, () => { createSettingsWindow(); });
   ipcMain.handle(IPC.SYSTEM_VERSION,        () => app.getVersion());
   ipcMain.handle(IPC.SYSTEM_MODEL_STATUS,   () => getModelStatus());
 
