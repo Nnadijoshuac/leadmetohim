@@ -42,22 +42,30 @@ export function closeDatabase(): void {
 
 function runMigrations(db: Database.Database, from: number): void {
   if (from < 1) {
-    // v1 → baseline, tables already created above
+    // v1 → baseline
   }
   if (from < 2) {
-    // v2 → add display_ref to chunks if upgrading from pre-v2
     try {
       db.exec(`ALTER TABLE semantic_chunks ADD COLUMN display_ref TEXT NOT NULL DEFAULT ''`);
-    } catch {
-      // column may already exist
-    }
+    } catch { /* column may already exist */ }
   }
   if (from < 3) {
-    // v3 → add inserted flag to history
     try {
       db.exec(`ALTER TABLE search_history ADD COLUMN inserted INTEGER NOT NULL DEFAULT 0`);
-    } catch {
-      // column may already exist
-    }
+    } catch { /* column may already exist */ }
+  }
+  if (from < 4) {
+    // Add KJV as the seed translation
+    try {
+      db.exec(`
+        INSERT OR IGNORE INTO translations(id, name, language, source)
+        VALUES ('KJV', 'King James Version', 'en', 'bundled');
+      `);
+    } catch { /* ignore */ }
+
+    // Populate FTS5 from any existing verses (for users upgrading from v3)
+    try {
+      db.exec(`INSERT INTO verses_fts(rowid, text) SELECT id, text FROM verses`);
+    } catch { /* FTS table may already be populated */ }
   }
 }
