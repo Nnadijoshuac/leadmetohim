@@ -10,13 +10,15 @@
     "seed": "pnpm exec tsx scripts/seed-bible.ts",
     "embeddings": "pnpm exec tsx scripts/generate-embeddings.ts",
     "models": "pnpm exec tsx scripts/download-models.ts",
-    "rebuild": "pnpm --filter @leadmetohim/desktop exec electron-rebuild -f -w better-sqlite3 nodejs-whisper",
+    "rebuild": "pnpm --filter @leadmetohim/desktop exec electron-rebuild -f -w better-sqlite3",
+    "translations": "pnpm exec tsx scripts/download-translations.ts",
+    "translations:en": "pnpm exec tsx scripts/download-translations.ts --lang en",
     "lint": "pnpm exec turbo lint",
     "typecheck": "pnpm exec turbo typecheck",
     "clean": "pnpm exec turbo clean && rimraf node_modules"
   },
   "pnpm": {
-    "neverBuiltDependencies": ["better-sqlite3", "nodejs-whisper"]
+    "neverBuiltDependencies": ["better-sqlite3"]
   },
   "devDependencies": {
     "turbo": "^2.0.0",
