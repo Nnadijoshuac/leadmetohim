@@ -6,8 +6,8 @@
  * files on first launch (no Node.js ↔ Electron ABI conflict).
  *
  * Sources
- *   1. eBible.org  — 600+ public-domain / CC translations (USFM zips)
- *   2. TheBibleAPI — 40+ translations via REST JSON (no API key required)
+ *   1. eBible.org    — 600+ public-domain / CC translations (USFM zips)
+ *   2. getbible.net  — 40+ translations via free REST API (no key required)
  *
  * Output
  *   data/translations/index.json           — metadata for every translation
@@ -15,9 +15,9 @@
  *      {"b":1,"c":1,"v":1,"t":"In the beginning…"}
  *
  * Usage
- *   pnpm translations              # all languages
+ *   pnpm translations              # all translations
  *   pnpm translations:en           # English only
- *   pnpm translations -- --limit 5 # first 5 translations only
+ *   pnpm translations -- --limit 5 # first N eBible translations only
  */
 
 import os from 'os';
@@ -35,17 +35,17 @@ const limitArg   = args.includes('--limit')
   : 999;
 
 // ── Paths ─────────────────────────────────────────────────────────────────────
-// Resolve relative to repo root regardless of where the script is invoked from
-const REPO_ROOT    = path.resolve(__dirname, '..');
-const DATA_DIR     = path.join(REPO_ROOT, 'data', 'translations');
-const INDEX_FILE   = path.join(REPO_ROOT, 'data', 'translations', 'index.json');
-const TMP_DIR      = path.join(os.tmpdir(), 'ltm-translations');
+const REPO_ROOT  = path.resolve(__dirname, '..');
+const DATA_DIR   = path.join(REPO_ROOT, 'data', 'translations');
+const INDEX_FILE = path.join(REPO_ROOT, 'data', 'translations', 'index.json');
+const TMP_DIR    = path.join(os.tmpdir(), 'ltm-translations');
 
 fs.mkdirSync(DATA_DIR, { recursive: true });
 fs.mkdirSync(TMP_DIR,  { recursive: true });
 
-// ── USFM book code → numeric book ID (1-based canonical order) ───────────────
+// ── USFM book code → numeric book ID ─────────────────────────────────────────
 const USFM_TO_ID: Record<string, number> = {
+  // Standard USFM codes
   GEN:1,EXO:2,LEV:3,NUM:4,DEU:5,JOS:6,JDG:7,RUT:8,'1SA':9,'2SA':10,
   '1KI':11,'2KI':12,'1CH':13,'2CH':14,EZR:15,NEH:16,EST:17,JOB:18,PSA:19,
   PRO:20,ECC:21,SNG:22,ISA:23,JER:24,LAM:25,EZK:26,DAN:27,HOS:28,
@@ -55,6 +55,10 @@ const USFM_TO_ID: Record<string, number> = {
   EPH:49,PHP:50,COL:51,'1TH':52,'2TH':53,'1TI':54,'2TI':55,TIT:56,
   PHM:57,HEB:58,JAS:59,'1PE':60,'2PE':61,'1JN':62,'2JN':63,'3JN':64,
   JUD:65,REV:66,
+  // Common variant codes used by older USFM projects
+  EZE:26,JOE:29,JOH:43,SON:22,SOL:22,PHI:50,
+  SNG:22,NAH:34,OBD:31,HBK:35,ZPH:36,ZCH:38,MLK:39,
+  MRK2:41,MKR:41,LKE:42,JHN2:43,ACT2:44,
 };
 
 // ── Translation definitions ───────────────────────────────────────────────────
@@ -67,123 +71,104 @@ interface TransMeta {
   license: string;
 }
 
+// Phase 1: eBible.org (USFM zips, public domain / CC)
 const EBIBLE_LIST: (TransMeta & { code: string })[] = [
-  // English — public domain / CC
-  { code:'eng-kjv',       id:'KJV',   name:'King James Version (1769)',          language:'en', source:'ebible', license:'Public Domain' },
-  { code:'eng-asv',       id:'ASV',   name:'American Standard Version (1901)',   language:'en', source:'ebible', license:'Public Domain' },
-  { code:'eng-web',       id:'WEB',   name:'World English Bible',                language:'en', source:'ebible', license:'Public Domain' },
-  { code:'eng-webbe',     id:'WEBBE', name:'World English Bible (British Ed.)',  language:'en', source:'ebible', license:'Public Domain' },
-  { code:'eng-ylt',       id:'YLT',   name:"Young's Literal Translation",        language:'en', source:'ebible', license:'Public Domain' },
-  { code:'eng-darby',     id:'DARBY', name:'Darby Bible Translation (1890)',     language:'en', source:'ebible', license:'Public Domain' },
-  { code:'eng-bbe',       id:'BBE',   name:'Bible in Basic English',             language:'en', source:'ebible', license:'Public Domain' },
-  { code:'eng-gnv',       id:'GNV',   name:'Geneva Bible (1599)',                language:'en', source:'ebible', license:'Public Domain' },
-  { code:'eng-dra',       id:'DRA',   name:'Douay-Rheims (1899)',                language:'en', source:'ebible', license:'Public Domain' },
-  { code:'eng-rv',        id:'RV',    name:'Revised Version (1885)',             language:'en', source:'ebible', license:'Public Domain' },
-  { code:'eng-jps',       id:'JPS',   name:'JPS Tanakh (1917)',                  language:'en', source:'ebible', license:'Public Domain' },
-  { code:'eng-rotherham', id:'ROT',   name:'Rotherham Emphasized Bible',        language:'en', source:'ebible', license:'Public Domain' },
-  { code:'eng-weymouth',  id:'WEY',   name:'Weymouth New Testament',            language:'en', source:'ebible', license:'Public Domain' },
-  { code:'eng-lxx',       id:'LXXE',  name:'Brenton Septuagint in English',    language:'en', source:'ebible', license:'Public Domain' },
+  // English — public domain / CC (codes verified against ebible.org/Scriptures/{code}_usfm.zip)
+  { code:'eng-kjv',      id:'KJV',   name:'King James Version (1769)',           language:'en', source:'ebible', license:'Public Domain' },
+  { code:'eng-asv',      id:'ASV',   name:'American Standard Version (1901)',    language:'en', source:'ebible', license:'Public Domain' },
+  { code:'eng-web',      id:'WEB',   name:'World English Bible',                 language:'en', source:'ebible', license:'Public Domain' },
+  { code:'eng-webbe',    id:'WEBBE', name:'World English Bible (British Ed.)',   language:'en', source:'ebible', license:'Public Domain' },
+  { code:'engylt',       id:'YLT',   name:"Young's Literal Translation",         language:'en', source:'ebible', license:'Public Domain' },
+  { code:'engBBE',       id:'BBE',   name:'Bible in Basic English',              language:'en', source:'ebible', license:'Public Domain' },
+  { code:'enggnv',       id:'GNV',   name:'Geneva Bible (1599)',                 language:'en', source:'ebible', license:'Public Domain' },
+  { code:'engDRA',       id:'DRA',   name:'Douay-Rheims (1899)',                 language:'en', source:'ebible', license:'Public Domain' },
+  { code:'eng-rv',       id:'RV',    name:'Revised Version (1885)',              language:'en', source:'ebible', license:'Public Domain' },
+  { code:'engjps',       id:'JPS',   name:'JPS Tanakh (1917)',                   language:'en', source:'ebible', license:'Public Domain' },
+  { code:'eng-lxx2012',  id:'LXXE',  name:'Brenton Septuagint in English',      language:'en', source:'ebible', license:'Public Domain' },
   // Spanish
-  { code:'spa-rv1909',    id:'RV09',  name:'Reina-Valera 1909',                  language:'es', source:'ebible', license:'Public Domain' },
-  { code:'spa-rvg',       id:'RVG',   name:'Reina Valera Gómez',                language:'es', source:'ebible', license:'CC' },
-  { code:'spa-sblh',      id:'SBLH',  name:'Santa Biblia',                       language:'es', source:'ebible', license:'CC' },
+  { code:'spaRV1909',    id:'RV09',  name:'Reina-Valera 1909',                   language:'es', source:'ebible', license:'Public Domain' },
+  { code:'sparvg',       id:'RVG',   name:'Reina Valera Gómez',                 language:'es', source:'ebible', license:'CC' },
+  { code:'spanblh',      id:'SBLH',  name:'Nueva Biblia Latinoamericana',        language:'es', source:'ebible', license:'CC' },
   // French
-  { code:'fra-ls1910',    id:'LS10',  name:'Louis Segond 1910',                  language:'fr', source:'ebible', license:'Public Domain' },
-  { code:'fra-pdv2017',   id:'PDV',   name:'Parole de Vie 2017',                language:'fr', source:'ebible', license:'CC' },
+  { code:'fraLSG',       id:'LS10',  name:'Louis Segond (1910)',                 language:'fr', source:'ebible', license:'Public Domain' },
   // German
-  { code:'deu-luth1545',  id:'LUT45', name:'Luther Bibel 1545',                  language:'de', source:'ebible', license:'Public Domain' },
-  { code:'deu-schlachter',id:'SCH',   name:'Schlachter 1951',                   language:'de', source:'ebible', license:'CC' },
+  { code:'deu1951',      id:'SCH51', name:'Schlachter Bibel (1951)',             language:'de', source:'ebible', license:'CC' },
+  { code:'deuelbbk',     id:'ELB',   name:'Elberfelder Bibel (1905)',            language:'de', source:'ebible', license:'Public Domain' },
   // Portuguese
-  { code:'por-almeida',   id:'ARA',   name:'Almeida Revista e Atualizada',       language:'pt', source:'ebible', license:'CC' },
+  { code:'porblt',       id:'BLT',   name:'Bíblia Livre (Portuguese)',           language:'pt', source:'ebible', license:'CC' },
   // Chinese
-  { code:'zho-cunp',      id:'CUNP',  name:'Chinese Union Version (Simplified)', language:'zh', source:'ebible', license:'CC' },
-  { code:'zho-cupt',      id:'CUPT',  name:'Chinese Union Version (Traditional)',language:'zh', source:'ebible', license:'CC' },
+  { code:'cmn-cu89s',    id:'CUNP',  name:'Chinese Union Version (Simplified)',  language:'zh', source:'ebible', license:'CC' },
+  { code:'cmn-cu89t',    id:'CUPT',  name:'Chinese Union Version (Traditional)', language:'zh', source:'ebible', license:'CC' },
   // Korean
-  { code:'kor-korean',    id:'KOR',   name:'Korean (개역개정)',                   language:'ko', source:'ebible', license:'CC' },
+  { code:'kor',          id:'KOR',   name:'Korean (개역한글)',                    language:'ko', source:'ebible', license:'Public Domain' },
   // Arabic
-  { code:'arb-vandyke',   id:'VANDY', name:'Van Dyke Arabic Bible',             language:'ar', source:'ebible', license:'Public Domain' },
+  { code:'arb-vd',       id:'VANDY', name:'Van Dyke Arabic Bible',              language:'ar', source:'ebible', license:'Public Domain' },
   // Russian
-  { code:'rus-synod',     id:'SYNOD', name:'Russian Synodal Bible',             language:'ru', source:'ebible', license:'Public Domain' },
+  { code:'russyn',       id:'SYNOD', name:'Russian Synodal Bible',              language:'ru', source:'ebible', license:'Public Domain' },
   // Swahili
-  { code:'swh-union',     id:'SWH',   name:'Swahili Union Version',             language:'sw', source:'ebible', license:'CC' },
+  { code:'swhulb',       id:'SWH',   name:'Swahili Union Version',              language:'sw', source:'ebible', license:'CC' },
   // Hindi
-  { code:'hin-irv',       id:'HIRV',  name:'Hindi IRV',                         language:'hi', source:'ebible', license:'CC' },
+  { code:'hin2017',      id:'HIRV',  name:'Hindi IRV (2017)',                   language:'hi', source:'ebible', license:'CC' },
   // Yoruba
-  { code:'yor-bible',     id:'YOR',   name:'Yoruba Bible',                      language:'yo', source:'ebible', license:'CC' },
+  { code:'yor',          id:'YOR',   name:'Yoruba Bible',                        language:'yo', source:'ebible', license:'CC' },
   // Igbo
-  { code:'ibo-bible',     id:'IBO',   name:'Igbo Bible',                        language:'ig', source:'ebible', license:'CC' },
+  { code:'ibo',          id:'IBO',   name:'Igbo Bible',                          language:'ig', source:'ebible', license:'CC' },
   // Hausa
-  { code:'hau-bible',     id:'HAU',   name:'Hausa Bible',                       language:'ha', source:'ebible', license:'CC' },
+  { code:'hausa',        id:'HAU',   name:'Hausa Bible',                         language:'ha', source:'ebible', license:'CC' },
   // Amharic
-  { code:'amh-haile',     id:'AMH',   name:'Amharic Haile Bible',               language:'am', source:'ebible', license:'CC' },
+  { code:'amh',          id:'AMH',   name:'Amharic Bible',                       language:'am', source:'ebible', license:'CC' },
   // Tagalog
-  { code:'tgl-ang',       id:'TGLA',  name:'Ang Biblia (Tagalog)',              language:'tl', source:'ebible', license:'Public Domain' },
+  { code:'tglulb',       id:'TGLA',  name:'Tagalog (Ang Biblia)',               language:'tl', source:'ebible', license:'Public Domain' },
   // Japanese
-  { code:'jpn-jlb',       id:'JLB',   name:'Japanese Living Bible',             language:'ja', source:'ebible', license:'CC' },
+  { code:'jpn1965',      id:'JLB',   name:'Japanese Bible (1965)',              language:'ja', source:'ebible', license:'Public Domain' },
 ];
 
-const THE_BIBLE_API_LIST: TransMeta[] = [
-  { id:'NIV',   name:'New International Version',         language:'en', source:'thebibleapi', license:'see source' },
-  { id:'NLT',   name:'New Living Translation',            language:'en', source:'thebibleapi', license:'see source' },
-  { id:'ESV',   name:'English Standard Version',          language:'en', source:'thebibleapi', license:'see source' },
-  { id:'NKJV',  name:'New King James Version',            language:'en', source:'thebibleapi', license:'see source' },
-  { id:'NRSV',  name:'New Revised Standard Version',      language:'en', source:'thebibleapi', license:'see source' },
-  { id:'MSG',   name:'The Message',                       language:'en', source:'thebibleapi', license:'see source' },
-  { id:'AMP',   name:'Amplified Bible',                   language:'en', source:'thebibleapi', license:'see source' },
-  { id:'NASB',  name:'New American Standard Bible',       language:'en', source:'thebibleapi', license:'see source' },
-  { id:'CSB',   name:'Christian Standard Bible',          language:'en', source:'thebibleapi', license:'see source' },
-  { id:'HCSB',  name:'Holman Christian Standard Bible',   language:'en', source:'thebibleapi', license:'see source' },
-  { id:'CEV',   name:'Contemporary English Version',      language:'en', source:'thebibleapi', license:'see source' },
-  { id:'CEB',   name:'Common English Bible',              language:'en', source:'thebibleapi', license:'see source' },
-  { id:'GW',    name:"God's Word Translation",            language:'en', source:'thebibleapi', license:'see source' },
-  { id:'NCV',   name:'New Century Version',               language:'en', source:'thebibleapi', license:'see source' },
-  { id:'GNT',   name:'Good News Translation',             language:'en', source:'thebibleapi', license:'see source' },
-  { id:'NET',   name:'New English Translation',           language:'en', source:'thebibleapi', license:'see source' },
-  { id:'LSV',   name:'Literal Standard Version',          language:'en', source:'thebibleapi', license:'Public Domain' },
-  { id:'BSB',   name:'Berean Standard Bible',             language:'en', source:'thebibleapi', license:'CC BY-SA' },
-  { id:'TLV',   name:'Tree of Life Version',              language:'en', source:'thebibleapi', license:'see source' },
-  { id:'OEB',   name:'Open English Bible',                language:'en', source:'thebibleapi', license:'Public Domain' },
+// Phase 2: getbible.net v2 (free REST API, no key required)
+// Covers translations not available on eBible.org + fallbacks for eBible failures
+interface GetBibleTrans extends TransMeta { slug: string }
+
+const GETBIBLE_LIST: GetBibleTrans[] = [
+  // English — public domain / free license
+  { slug:'bbe',       id:'BBE',   name:'Bible in Basic English',            language:'en', source:'getbible', license:'Public Domain' },
+  { slug:'ylt',       id:'YLT',   name:"Young's Literal Translation",        language:'en', source:'getbible', license:'Public Domain' },
+  { slug:'darby',     id:'DARBY', name:'Darby Bible (1890)',                 language:'en', source:'getbible', license:'Public Domain' },
+  { slug:'geneva1599',id:'GNV',   name:'Geneva Bible (1599)',                language:'en', source:'getbible', license:'Public Domain' },
+  { slug:'drc',       id:'DRC',   name:'Douay-Rheims Challoner (1752)',      language:'en', source:'getbible', license:'Public Domain' },
+  { slug:'jps',       id:'JPS',   name:'JPS Tanakh (1917)',                  language:'en', source:'getbible', license:'Public Domain' },
+  { slug:'emphbbl',   id:'ROT',   name:"Rotherham's Emphasized Bible",       language:'en', source:'getbible', license:'Public Domain' },
+  { slug:'lxxe',      id:'LXXE',  name:'Brenton LXX English',               language:'en', source:'getbible', license:'Public Domain' },
+  { slug:'net',       id:'NET',   name:'New English Translation (NET)',      language:'en', source:'getbible', license:'CC BY' },
+  { slug:'nheb',      id:'NHEB',  name:'New Heart English Bible',            language:'en', source:'getbible', license:'Public Domain' },
+  { slug:'oeb',       id:'OEB',   name:'Open English Bible',                 language:'en', source:'getbible', license:'CC' },
+  { slug:'cpdv',      id:'CPDV',  name:'Catholic Public Domain Version',     language:'en', source:'getbible', license:'Public Domain' },
+  { slug:'ts2009',    id:'TS09',  name:'The Scriptures 2009',                language:'en', source:'getbible', license:'CC' },
+  { slug:'ukjv',      id:'UKJV',  name:'Updated King James Version',         language:'en', source:'getbible', license:'Public Domain' },
+  { slug:'kjv21',     id:'KJV21', name:'King James Version (21st Century)',  language:'en', source:'getbible', license:'Public Domain' },
+  { slug:'akjv',      id:'AKJV',  name:'American King James Version',        language:'en', source:'getbible', license:'Public Domain' },
+  // International
+  { slug:'aov',       id:'AFRIKAANS', name:'Afrikaans Ou Vertaling (1933)',  language:'af', source:'getbible', license:'Public Domain' },
+  { slug:'fi',        id:'FIN',   name:'Finnish Bible (1776)',               language:'fi', source:'getbible', license:'Public Domain' },
+  { slug:'bkr',       id:'CZE',   name:'Czech Bible Kralicka',               language:'cs', source:'getbible', license:'Public Domain' },
+  { slug:'hvd',       id:'HUN',   name:'Hungarian Károli Bible',             language:'hu', source:'getbible', license:'Public Domain' },
+  { slug:'lith',      id:'LIT',   name:'Lithuanian Bible',                   language:'lt', source:'getbible', license:'Public Domain' },
+  { slug:'nor',       id:'NOR',   name:'Norwegian Bible (1930)',             language:'no', source:'getbible', license:'Public Domain' },
+  { slug:'rom',       id:'ROM',   name:'Romanian Cornilescu Bible',          language:'ro', source:'getbible', license:'CC' },
+  { slug:'swe1917',   id:'SWE',   name:'Swedish Bible (1917)',               language:'sv', source:'getbible', license:'Public Domain' },
+  { slug:'tagalog',   id:'TAG',   name:'Tagalog Bible (Ang Biblia)',         language:'tl', source:'getbible', license:'Public Domain' },
 ];
-
-// ── Book chapter counts (needed for chapter-by-chapter API download) ──────────
-const CHAPTER_COUNTS: Record<number, number> = {
-  1:50,2:40,3:27,4:36,5:34,6:24,7:21,8:4,9:31,10:24,11:22,12:25,
-  13:29,14:36,15:10,16:13,17:10,18:42,19:150,20:31,21:12,22:8,
-  23:66,24:52,25:5,26:48,27:12,28:14,29:3,30:9,31:1,32:4,33:7,
-  34:3,35:3,36:3,37:2,38:14,39:4,40:28,41:16,42:24,43:21,44:28,
-  45:16,46:16,47:13,48:6,49:6,50:4,51:4,52:5,53:5,54:6,55:4,
-  56:3,57:1,58:13,59:5,60:5,61:3,62:5,63:1,64:1,65:1,66:22,
-};
-
-const API_BOOK_SLUGS: Record<number, string> = {
-  1:'genesis',2:'exodus',3:'leviticus',4:'numbers',5:'deuteronomy',
-  6:'joshua',7:'judges',8:'ruth',9:'1-samuel',10:'2-samuel',
-  11:'1-kings',12:'2-kings',13:'1-chronicles',14:'2-chronicles',
-  15:'ezra',16:'nehemiah',17:'esther',18:'job',19:'psalms',
-  20:'proverbs',21:'ecclesiastes',22:'song-of-solomon',23:'isaiah',
-  24:'jeremiah',25:'lamentations',26:'ezekiel',27:'daniel',28:'hosea',
-  29:'joel',30:'amos',31:'obadiah',32:'jonah',33:'micah',34:'nahum',
-  35:'habakkuk',36:'zephaniah',37:'haggai',38:'zechariah',39:'malachi',
-  40:'matthew',41:'mark',42:'luke',43:'john',44:'acts',45:'romans',
-  46:'1-corinthians',47:'2-corinthians',48:'galatians',49:'ephesians',
-  50:'philippians',51:'colossians',52:'1-thessalonians',53:'2-thessalonians',
-  54:'1-timothy',55:'2-timothy',56:'titus',57:'philemon',58:'hebrews',
-  59:'james',60:'1-peter',61:'2-peter',62:'1-john',63:'2-john',
-  64:'3-john',65:'jude',66:'revelation',
-};
 
 // ── Utilities ─────────────────────────────────────────────────────────────────
 
 async function fetchText(url: string): Promise<string> {
   return new Promise((resolve, reject) => {
     const mod = url.startsWith('https') ? https : http;
-    const req = mod.get(url, { headers: { 'User-Agent': 'LeadMeToHim/1.0 (+https://github.com/leadmetohim)' } }, (res) => {
-      if (res.statusCode === 301 || res.statusCode === 302) {
-        const loc = res.headers.location;
-        if (loc) { resolve(fetchText(loc)); return; }
+    const req = mod.get(url, { headers: { 'User-Agent': 'LeadMeToHim/1.0' } }, (res) => {
+      if ((res.statusCode === 301 || res.statusCode === 302) && res.headers.location) {
+        resolve(fetchText(res.headers.location));
+        return;
       }
       if (res.statusCode && res.statusCode >= 400) {
-        reject(new Error(`HTTP ${res.statusCode}`));
+        reject(new Error(`HTTP ${res.statusCode} — ${url}`));
         return;
       }
       const chunks: Buffer[] = [];
@@ -200,10 +185,10 @@ async function downloadFile(url: string, dest: string): Promise<void> {
     const mod = url.startsWith('https') ? https : http;
     const file = fs.createWriteStream(dest);
     const req = mod.get(url, { headers: { 'User-Agent': 'LeadMeToHim/1.0' } }, (res) => {
-      if (res.statusCode === 301 || res.statusCode === 302) {
+      if ((res.statusCode === 301 || res.statusCode === 302) && res.headers.location) {
         file.close();
-        const loc = res.headers.location;
-        if (loc) { resolve(downloadFile(loc, dest)); return; }
+        resolve(downloadFile(res.headers.location, dest));
+        return;
       }
       res.pipe(file);
       file.on('finish', () => file.close(() => resolve()));
@@ -227,37 +212,122 @@ function extractZip(zipPath: string, outDir: string): void {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-// ── USFM parser → verse lines ─────────────────────────────────────────────────
+// ── USFM parser ───────────────────────────────────────────────────────────────
 
 interface VerseLine { b: number; c: number; v: number; t: string }
 
-function parseUsfmDir(dir: string): VerseLine[] {
-  const out: VerseLine[] = [];
-  const files = fs.readdirSync(dir).filter((f) =>
-    /\.(usfm|sfm|SFM)$/i.test(f),
-  );
+/** Resolve a USFM book identifier to a canonical 1-66 book number.
+ *  Handles standard codes ("GEN") and eBible's embedded codes ("GENengYLT"). */
+function resolveBookId(raw: string): number {
+  const upper = raw.toUpperCase();
+  // Exact match first (standard USFM)
+  if (USFM_TO_ID[upper]) return USFM_TO_ID[upper]!;
+  // eBible appends translation code to the book code (e.g. GENengYLT → GEN)
+  // Try decreasing prefix lengths: 4, 3, 2
+  for (const len of [4, 3, 2]) {
+    const prefix = upper.substring(0, len);
+    if (USFM_TO_ID[prefix]) return USFM_TO_ID[prefix]!;
+  }
+  return 0;
+}
 
-  for (const file of files) {
-    const content = fs.readFileSync(path.join(dir, file), 'utf8');
-    let bookId = 0;
-    let chapter = 0;
-
-    for (const rawLine of content.split('\n')) {
-      const line = rawLine.trim();
-
-      const idM = line.match(/^\\id\s+([A-Z0-9]+)/i);
-      if (idM) { bookId = USFM_TO_ID[idM[1]!.toUpperCase()] ?? 0; continue; }
-
-      const chapM = line.match(/^\\c\s+(\d+)/);
-      if (chapM) { chapter = parseInt(chapM[1]!, 10); continue; }
-
-      const vM = line.match(/^\\v\s+(\d+)\s+(.*)/);
-      if (vM && bookId > 0 && chapter > 0) {
-        const verseNum = parseInt(vM[1]!, 10);
-        const text = (vM[2] ?? '').replace(/\\[a-z]+\*?/g, '').replace(/\|/g, '').trim();
-        if (text.length > 1) out.push({ b: bookId, c: chapter, v: verseNum, t: text });
+/** Recursively find all USFM/SFM files under a directory. */
+function findUsfmFiles(dir: string): string[] {
+  const results: string[] = [];
+  try {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        results.push(...findUsfmFiles(full));
+      } else if (/\.(usfm|sfm)$/i.test(entry.name)) {
+        results.push(full);
       }
     }
+  } catch { /* ignore permission errors */ }
+  return results;
+}
+
+/** Parse USFM text for a known bookId, returning verse lines.
+ *  Handles multi-line verse content, footnotes, cross-refs, and inline markers. */
+function parseUsfmContent(content: string, bookId: number): VerseLine[] {
+  const out: VerseLine[] = [];
+  let chapter = 0;
+  let verseNum = 0;
+  const verseAccum: string[] = [];
+
+  function flushVerse() {
+    if (verseNum > 0 && chapter > 0 && verseAccum.length > 0) {
+      let t = verseAccum.join(' ')
+        // Remove footnote blocks \f ... \f*
+        .replace(/\\f\b.*?\\f\*/g, '')
+        // Remove cross-ref blocks \x ... \x*
+        .replace(/\\x\b.*?\\x\*/g, '')
+        // Remove all remaining USFM markers (\word or \word*)
+        .replace(/\\[a-zA-Z0-9]+\*?/g, '')
+        // Remove attribute separators
+        .replace(/\|[^\s]*/g, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+      if (t.length > 1) out.push({ b: bookId, c: chapter, v: verseNum, t });
+    }
+    verseNum = 0;
+    verseAccum.length = 0;
+  }
+
+  for (const rawLine of content.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line) continue;
+
+    // Chapter marker
+    const chapM = line.match(/^\\c\s+(\d+)/);
+    if (chapM) { flushVerse(); chapter = parseInt(chapM[1]!, 10); continue; }
+
+    // Verse marker — flush previous verse then start new one
+    const vM = line.match(/^\\v\s+(\d+)(.*)/);
+    if (vM) {
+      flushVerse();
+      verseNum = parseInt(vM[1]!, 10);
+      const tail = (vM[2] ?? '').trim();
+      if (tail) verseAccum.push(tail);
+      continue;
+    }
+
+    // Inside a verse: accumulate continuation lines
+    // Skip section/heading markers (they're not verse text)
+    if (verseNum > 0) {
+      if (line.match(/^\\(ms|s[12]?|mr|r|d|h|toc|ide?|rem)\b/)) continue;
+      // Poetry/paragraph markers: strip the marker, keep any trailing text
+      if (line.match(/^\\[qpmi][1-9]?\b(.*)/)) {
+        const m = line.match(/^\\[qpmi][1-9]?\b(.*)/);
+        const tail = (m?.[1] ?? '').trim();
+        if (tail) verseAccum.push(tail);
+        continue;
+      }
+      // Any other line (inline markers, continuation text) — accumulate as-is
+      verseAccum.push(line);
+    }
+  }
+  flushVerse();
+  return out;
+}
+
+/** Parse all USFM files found under a directory (recursive). */
+function parseUsfmDir(dir: string): VerseLine[] {
+  const files = findUsfmFiles(dir);
+  const out: VerseLine[] = [];
+
+  for (const file of files) {
+    let content: string;
+    try { content = fs.readFileSync(file, 'utf8'); }
+    catch { continue; }
+
+    // Determine book ID from \id marker
+    const idM = content.match(/\\id\s+([A-Za-z0-9]+)/);
+    if (!idM) continue;
+    const bookId = resolveBookId(idM[1]!);
+    if (!bookId) continue;
+
+    out.push(...parseUsfmContent(content, bookId));
   }
 
   return out;
@@ -265,9 +335,7 @@ function parseUsfmDir(dir: string): VerseLine[] {
 
 // ── Index helpers ─────────────────────────────────────────────────────────────
 
-interface Index {
-  translations: TransMeta[];
-}
+interface Index { translations: TransMeta[] }
 
 function loadIndex(): Index {
   if (fs.existsSync(INDEX_FILE)) {
@@ -290,7 +358,7 @@ function writeNdjson(id: string, lines: VerseLine[]): void {
   out.end();
 }
 
-// ── eBible.org downloader ─────────────────────────────────────────────────────
+// ── Phase 1: eBible.org downloader ───────────────────────────────────────────
 
 async function downloadEbible(
   index: Index,
@@ -312,13 +380,8 @@ async function downloadEbible(
     console.log(`  [unzip]    ${trans.code}`);
     extractZip(zipPath, outDir);
 
-    // USFM files may be in a subdirectory named after the translation code
-    let usfmDir = outDir;
-    const subdirs = fs.readdirSync(outDir, { withFileTypes: true }).filter((d) => d.isDirectory());
-    if (subdirs.length > 0) usfmDir = path.join(outDir, subdirs[0]!.name);
-
     console.log(`  [parse]    ${trans.code}`);
-    const verses = parseUsfmDir(usfmDir);
+    const verses = parseUsfmDir(outDir);
 
     if (verses.length < 100) {
       console.warn(`  [warn]     ${trans.id}: only ${verses.length} verses — skipping`);
@@ -328,10 +391,12 @@ async function downloadEbible(
     console.log(`  [write]    ${verses.length.toLocaleString()} verses → data/translations/${trans.id}.ndjson`);
     writeNdjson(trans.id, verses);
 
-    const meta: TransMeta = { id: trans.id, name: trans.name, language: trans.language, source: trans.source, license: trans.license };
+    const meta: TransMeta = {
+      id: trans.id, name: trans.name,
+      language: trans.language, source: trans.source, license: trans.license,
+    };
     index.translations.push(meta);
     saveIndex(index);
-
     return true;
   } catch (err) {
     console.warn(`  [fail]     ${trans.id}: ${(err as Error).message}`);
@@ -342,14 +407,22 @@ async function downloadEbible(
   }
 }
 
-// ── TheBibleAPI downloader ────────────────────────────────────────────────────
+// ── Phase 2: getbible.net v2 downloader ──────────────────────────────────────
 
-const THE_API_BASE = 'https://thebibleapi.netlify.app/api';
-const BOOK_IDS = Array.from({ length: 66 }, (_, i) => i + 1);
+const GETBIBLE_BASE = 'https://api.getbible.net/v2';
 
-async function downloadTheBibleApi(
+const BOOK_CHAPTER_COUNTS: Record<number, number> = {
+  1:50,2:40,3:27,4:36,5:34,6:24,7:21,8:4,9:31,10:24,11:22,12:25,
+  13:29,14:36,15:10,16:13,17:10,18:42,19:150,20:31,21:12,22:8,
+  23:66,24:52,25:5,26:48,27:12,28:14,29:3,30:9,31:1,32:4,33:7,
+  34:3,35:3,36:3,37:2,38:14,39:4,40:28,41:16,42:24,43:21,44:28,
+  45:16,46:16,47:13,48:6,49:6,50:4,51:4,52:5,53:5,54:6,55:4,
+  56:3,57:1,58:13,59:5,60:5,61:3,62:5,63:1,64:1,65:1,66:22,
+};
+
+async function downloadGetBible(
   index: Index,
-  trans: TransMeta,
+  trans: GetBibleTrans,
 ): Promise<boolean> {
   if (isAlreadyDownloaded(index, trans.id)) {
     console.log(`  [skip]     ${trans.id} — already downloaded`);
@@ -360,40 +433,42 @@ async function downloadTheBibleApi(
   const verses: VerseLine[] = [];
   let failures = 0;
 
-  const slug = trans.id.toLowerCase();
-
-  for (const bookId of BOOK_IDS) {
-    const bookSlug  = API_BOOK_SLUGS[bookId]!;
-    const chapCount = CHAPTER_COUNTS[bookId] ?? 0;
-
+  for (let bookId = 1; bookId <= 66; bookId++) {
+    const chapCount = BOOK_CHAPTER_COUNTS[bookId] ?? 0;
     for (let ch = 1; ch <= chapCount; ch++) {
-      const url = `${THE_API_BASE}/bible/${slug}/${bookSlug}/${ch}`;
+      const url = `${GETBIBLE_BASE}/${trans.slug}/${bookId}/${ch}.json`;
       try {
         const raw  = await fetchText(url);
-        const data = JSON.parse(raw) as { verses?: Array<{ verse: number; text: string }> };
+        const data = JSON.parse(raw) as {
+          verses?: Array<{ verse: number; text: string }>;
+        };
         for (const vv of data.verses ?? []) {
           if (vv.text) verses.push({ b: bookId, c: ch, v: vv.verse, t: vv.text.trim() });
         }
-        await sleep(200);
+        await sleep(100);
       } catch {
         failures++;
-        if (failures > 30) {
+        if (failures > 20) {
           console.warn(`  [abort]    ${trans.id}: too many failures`);
           return false;
         }
-        await sleep(500);
+        await sleep(400);
       }
     }
   }
 
-  if (verses.length < 1000) {
+  if (verses.length < 500) {
     console.warn(`  [warn]     ${trans.id}: only ${verses.length} verses — skipping`);
     return false;
   }
 
   console.log(`  [write]    ${verses.length.toLocaleString()} verses → data/translations/${trans.id}.ndjson`);
   writeNdjson(trans.id, verses);
-  index.translations.push(trans);
+  const meta: TransMeta = {
+    id: trans.id, name: trans.name,
+    language: trans.language, source: trans.source, license: trans.license,
+  };
+  index.translations.push(meta);
   saveIndex(index);
   return true;
 }
@@ -408,7 +483,7 @@ async function main() {
   let downloaded = 0;
   let failed = 0;
 
-  // Phase 1: eBible.org ────────────────────────────────────────────────────────
+  // ── Phase 1: eBible.org (USFM) ────────────────────────────────────────────
   const ebibleList = (langFilter ? EBIBLE_LIST.filter((t) => t.language === langFilter) : EBIBLE_LIST)
     .slice(0, limitArg);
 
@@ -420,28 +495,34 @@ async function main() {
     await sleep(300);
   }
 
-  // Phase 2: TheBibleAPI ───────────────────────────────────────────────────────
-  if (!langFilter || langFilter === 'en') {
-    const apiList = THE_BIBLE_API_LIST.slice(0, Math.max(0, limitArg - EBIBLE_LIST.length));
-    if (apiList.length > 0) {
-      console.log(`\nPhase 2 — TheBibleAPI (${apiList.length} translations)\n`);
-      for (const trans of apiList) {
-        const ok = await downloadTheBibleApi(index, trans);
-        if (ok) downloaded++;
-        else failed++;
-      }
+  // ── Phase 2: getbible.net v2 ───────────────────────────────────────────────
+  const apiList = (langFilter
+    ? GETBIBLE_LIST.filter((t) => t.language === langFilter)
+    : GETBIBLE_LIST
+  ).slice(0, Math.max(0, limitArg - EBIBLE_LIST.length));
+
+  if (apiList.length > 0) {
+    console.log(`\nPhase 2 — getbible.net (${apiList.length} translations)\n`);
+    for (const trans of apiList) {
+      const ok = await downloadGetBible(index, trans);
+      if (ok) downloaded++;
+      else failed++;
     }
   }
 
   console.log(`
 === Done ===
-  Translations downloaded : ${downloaded}
-  Failed / skipped        : ${failed}
-  Total in index          : ${index.translations.length}
-  Output folder           : ${DATA_DIR}
+  Downloaded this run : ${downloaded}
+  Failed / skipped    : ${failed}
+  Total in index      : ${index.translations.length}
+  Output folder       : ${DATA_DIR}
 
 Start the app with "pnpm dev" — it will automatically import any new
 translation files into the local database on first launch.
+
+Note: Copyrighted translations (NIV, ESV, NLT, NKJV, MSG, AMP, NASB, CSB)
+require a licensed API. Register a free key at https://scripture.api.bible
+and use it with a separate download step.
 `);
 }
 

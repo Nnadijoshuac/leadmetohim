@@ -34,6 +34,34 @@
       "language": "en",
       "source": "ebible",
       "license": "Public Domain"
+    },
+    {
+      "id": "YLT",
+      "name": "Young's Literal Translation",
+      "language": "en",
+      "source": "ebible",
+      "license": "Public Domain"
+    },
+    {
+      "id": "BBE",
+      "name": "Bible in Basic English",
+      "language": "en",
+      "source": "ebible",
+      "license": "Public Domain"
+    },
+    {
+      "id": "GNV",
+      "name": "Geneva Bible (1599)",
+      "language": "en",
+      "source": "ebible",
+      "license": "Public Domain"
+    },
+    {
+      "id": "DRA",
+      "name": "Douay-Rheims (1899)",
+      "language": "en",
+      "source": "ebible",
+      "license": "Public Domain"
     }
   ]
 }
