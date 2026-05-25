@@ -1,6 +1,5 @@
 import path from 'path';
-import { app } from 'electron';
-import { BrowserWindow } from 'electron';
+const { app, BrowserWindow } = require('electron');
 import { IPC } from '@leadmetohim/shared-types';
 import type { ModelStatus, AppSettings } from '@leadmetohim/shared-types';
 import { loadEmbedder, isEmbedderLoaded } from '@leadmetohim/vector-search';

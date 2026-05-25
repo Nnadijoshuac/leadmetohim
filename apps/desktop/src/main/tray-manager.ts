@@ -1,4 +1,4 @@
-import { Tray, Menu, app, nativeImage } from 'electron';
+const { Tray, Menu, app, nativeImage } = require('electron');
 import path from 'path';
 import fs from 'fs';
 import { showOverlay, createSettingsWindow } from './window-manager.js';

@@ -1,4 +1,4 @@
-import { globalShortcut } from 'electron';
+const { globalShortcut } = require('electron');
 import { log } from './logger.js';
 import { showOverlay, hideOverlay, isOverlayVisible } from './window-manager.js';
 

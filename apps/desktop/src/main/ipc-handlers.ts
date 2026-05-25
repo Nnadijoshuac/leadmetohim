@@ -1,6 +1,5 @@
-import { ipcMain, clipboard } from 'electron';
+const { ipcMain, clipboard, app } = require('electron');
 import path from 'path';
-import { app } from 'electron';
 import type Database from 'better-sqlite3';
 import { IPC } from '@leadmetohim/shared-types';
 import type { AppSettings, InsertMode, SearchResult } from '@leadmetohim/shared-types';

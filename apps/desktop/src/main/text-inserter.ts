@@ -1,4 +1,4 @@
-import { clipboard } from 'electron';
+const { clipboard } = require('electron');
 import { log } from './logger.js';
 
 const PASTE_DELAY_MS = 120;

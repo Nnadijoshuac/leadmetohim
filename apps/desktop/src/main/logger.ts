@@ -1,6 +1,6 @@
 import path from 'path';
 import fs from 'fs';
-import { app } from 'electron';
+const { app } = require('electron');
 
 let logFile: string | null = null;
 
