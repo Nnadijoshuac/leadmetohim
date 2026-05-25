@@ -62,6 +62,153 @@
       "language": "en",
       "source": "ebible",
       "license": "Public Domain"
+    },
+    {
+      "id": "JPS",
+      "name": "JPS Tanakh (1917)",
+      "language": "en",
+      "source": "ebible",
+      "license": "Public Domain"
+    },
+    {
+      "id": "LXXE",
+      "name": "Brenton Septuagint in English",
+      "language": "en",
+      "source": "ebible",
+      "license": "Public Domain"
+    },
+    {
+      "id": "RV09",
+      "name": "Reina-Valera 1909",
+      "language": "es",
+      "source": "ebible",
+      "license": "Public Domain"
+    },
+    {
+      "id": "RVG",
+      "name": "Reina Valera Gómez",
+      "language": "es",
+      "source": "ebible",
+      "license": "CC"
+    },
+    {
+      "id": "LS10",
+      "name": "Louis Segond (1910)",
+      "language": "fr",
+      "source": "ebible",
+      "license": "Public Domain"
+    },
+    {
+      "id": "SCH51",
+      "name": "Schlachter Bibel (1951)",
+      "language": "de",
+      "source": "ebible",
+      "license": "CC"
+    },
+    {
+      "id": "ELB",
+      "name": "Elberfelder Bibel (1905)",
+      "language": "de",
+      "source": "ebible",
+      "license": "Public Domain"
+    },
+    {
+      "id": "BLT",
+      "name": "Bíblia Livre (Portuguese)",
+      "language": "pt",
+      "source": "ebible",
+      "license": "CC"
+    },
+    {
+      "id": "CUNP",
+      "name": "Chinese Union Version (Simplified)",
+      "language": "zh",
+      "source": "ebible",
+      "license": "CC"
+    },
+    {
+      "id": "CUPT",
+      "name": "Chinese Union Version (Traditional)",
+      "language": "zh",
+      "source": "ebible",
+      "license": "CC"
+    },
+    {
+      "id": "KOR",
+      "name": "Korean (개역한글)",
+      "language": "ko",
+      "source": "ebible",
+      "license": "Public Domain"
+    },
+    {
+      "id": "VANDY",
+      "name": "Van Dyke Arabic Bible",
+      "language": "ar",
+      "source": "ebible",
+      "license": "Public Domain"
+    },
+    {
+      "id": "SYNOD",
+      "name": "Russian Synodal Bible",
+      "language": "ru",
+      "source": "ebible",
+      "license": "Public Domain"
+    },
+    {
+      "id": "SWH",
+      "name": "Swahili Union Version",
+      "language": "sw",
+      "source": "ebible",
+      "license": "CC"
+    },
+    {
+      "id": "HIRV",
+      "name": "Hindi IRV (2017)",
+      "language": "hi",
+      "source": "ebible",
+      "license": "CC"
+    },
+    {
+      "id": "YOR",
+      "name": "Yoruba Bible",
+      "language": "yo",
+      "source": "ebible",
+      "license": "CC"
+    },
+    {
+      "id": "IBO",
+      "name": "Igbo Bible",
+      "language": "ig",
+      "source": "ebible",
+      "license": "CC"
+    },
+    {
+      "id": "HAU",
+      "name": "Hausa Bible",
+      "language": "ha",
+      "source": "ebible",
+      "license": "CC"
+    },
+    {
+      "id": "AMH",
+      "name": "Amharic Bible",
+      "language": "am",
+      "source": "ebible",
+      "license": "CC"
+    },
+    {
+      "id": "TGLA",
+      "name": "Tagalog (Ang Biblia)",
+      "language": "tl",
+      "source": "ebible",
+      "license": "Public Domain"
+    },
+    {
+      "id": "JLB",
+      "name": "Japanese Bible (1965)",
+      "language": "ja",
+      "source": "ebible",
+      "license": "Public Domain"
     }
   ]
 }
