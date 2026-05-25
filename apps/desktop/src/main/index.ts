@@ -1,6 +1,6 @@
-import { app, session, ipcMain } from 'electron';
 import path from 'path';
 import fs from 'fs';
+import { app, session, ipcMain } from 'electron';
 import { log } from './logger.js';
 import { createOverlayWindow } from './window-manager.js';
 import { createTray, destroyTray } from './tray-manager.js';
@@ -20,21 +20,26 @@ import {
 import { BIBLE_BOOKS } from '@leadmetohim/scripture-engine';
 import { embed, getModelId, loadVectorIndex } from '@leadmetohim/vector-search';
 
-// ── Single instance lock ──────────────────────────────────────────────────────
+// Add global error handlers BEFORE everything else
+process.on('uncaughtException', (err) => {
+  console.error('[FATAL] Uncaught exception:', err);
+  process.exit(1);
+});
 
-if (!app.requestSingleInstanceLock()) {
-  app.quit();
-  process.exit(0);
-}
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('[FATAL] Unhandled rejection:', reason, promise);
+  process.exit(1);
+});
+
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function getDataDir(): string {
-  if (app.isPackaged) {
+function getDataDir(application: any): string {
+  if (application.isPackaged) {
     return path.join(process.resourcesPath, 'data');
   }
   // Dev: apps/desktop → ../../data
-  return path.resolve(app.getAppPath(), '../../data');
+  return path.resolve(application.getAppPath(), '../../data');
 }
 
 type Db = ReturnType<typeof initDatabase>;
@@ -123,7 +128,6 @@ function importTranslationFiles(db: Db, dataDir: string): void {
     totalImported += rows.length;
     newTranslations++;
     log.info(`Imported ${rows.length.toLocaleString()} verses for ${meta.id} (${meta.name})`);
-    try { fs.unlinkSync(ndjsonPath); } catch { /* not critical */ }
   }
 
   if (newTranslations > 0) {
@@ -150,65 +154,99 @@ async function generateEmbeddingsIfNeeded(db: Db): Promise<void> {
   log.info('Embeddings complete');
 }
 
+// ── Single instance lock ──────────────────────────────────────────────────────
+
+if (!app.requestSingleInstanceLock()) {
+  app.quit();
+  process.exit(0);
+}
+
 // ── App lifecycle ─────────────────────────────────────────────────────────────
 
+console.log('[STARTUP] app.whenReady() called, setting up promise handler');
+
 app.whenReady().then(async () => {
+  console.log('[APP] whenReady promise resolved');
   log.info(`LeadMeToHim v${app.getVersion()} starting`);
 
-  // ── Database ─────────────────────────────────────────────────────────────
-  const dbPath = path.join(app.getPath('userData'), 'leadmetohim.db');
-  const db = initDatabase(dbPath);
-  log.info(`Database ready: ${dbPath}`);
+  try {
+    // ── Database ─────────────────────────────────────────────────────────────
+    console.log('[APP] Initializing database...');
+    const dbPath = path.join(app.getPath('userData'), 'leadmetohim.db');
+    console.log(`[APP] Database path: ${dbPath}`);
+    const db = initDatabase(dbPath);
+    log.info(`Database ready: ${dbPath}`);
+    console.log('[APP] Database initialized successfully');
 
-  // ── First-run seed ────────────────────────────────────────────────────────
-  seedIfNeeded(db, getDataDir());
+    // ── First-run seed ────────────────────────────────────────────────────────
+    console.log('[APP] Seeding database if needed...');
+    seedIfNeeded(db, getDataDir(app));
+    console.log('[APP] Seed complete');
 
-  const settings = getAllSettings(db);
+    const settings = getAllSettings(db);
+    console.log('[APP] Settings loaded');
 
-  // ── Microphone permission ────────────────────────────────────────────────
-  session.defaultSession.setPermissionRequestHandler((webContents, permission, callback) => {
-    const allowed = ['media', 'audioCapture'].includes(permission);
-    callback(allowed);
-  });
-
-  // ── IPC ──────────────────────────────────────────────────────────────────
-  function onPTTStart(): void {
-    overlayWin?.webContents.send('speech:startRecording');
-  }
-
-  function onPTTStop(): void {
-    overlayWin?.webContents.send('speech:stopRecording');
-  }
-
-  setupIpcHandlers(db, onPTTStart, onPTTStop);
-
-  ipcMain.handle('speech:audioBuffer', async (event, buffer: Buffer) => {
-    await handleAudioBuffer(buffer, event.sender);
-  });
-
-  // ── Windows & Tray ───────────────────────────────────────────────────────
-  const overlayWin = createOverlayWindow();
-  createTray((enabled) => setAlwaysListening(enabled));
-
-  // ── Hotkeys ──────────────────────────────────────────────────────────────
-  registerHotkeys(settings.hotkey, settings.pushToTalkHotkey, onPTTStart, onPTTStop);
-
-  // ── Local models → embeddings → vector index (background) ────────────────
-  initModels(settings, overlayWin)
-    .then(async () => {
-      await generateEmbeddingsIfNeeded(db);
-      try {
-        loadVectorIndex(db);
-        log.info('Vector index ready');
-      } catch (e) {
-        log.warn('Vector index load failed:', e);
-      }
-    })
-    .catch((e) => {
-      log.error('Model init error:', e);
+    // ── Microphone permission ────────────────────────────────────────────────
+    console.log('[APP] Setting up microphone permissions...');
+    session.defaultSession.setPermissionRequestHandler((webContents, permission, callback) => {
+      const allowed = ['media', 'audioCapture'].includes(permission);
+      callback(allowed);
     });
 
-  log.info('App ready');
+    // ── IPC ──────────────────────────────────────────────────────────────────
+    console.log('[APP] Setting up IPC handlers...');
+    function onPTTStart(): void {
+      overlayWin?.webContents.send('speech:startRecording');
+    }
+
+    function onPTTStop(): void {
+      overlayWin?.webContents.send('speech:stopRecording');
+    }
+
+    setupIpcHandlers(db, onPTTStart, onPTTStop);
+
+    ipcMain.handle('speech:audioBuffer', async (event, buffer: Buffer) => {
+      await handleAudioBuffer(buffer, event.sender);
+    });
+
+    // ── Windows & Tray ───────────────────────────────────────────────────────
+    console.log('[APP] Creating overlay window...');
+    const overlayWin = createOverlayWindow();
+    console.log('[APP] Creating tray...');
+    createTray((enabled) => setAlwaysListening(enabled));
+    console.log('[APP] Windows created');
+
+    // ── Hotkeys ──────────────────────────────────────────────────────────────
+    console.log('[APP] Registering hotkeys...');
+    registerHotkeys(settings.hotkey, settings.pushToTalkHotkey, onPTTStart, onPTTStop);
+
+    // ── Local models → embeddings → vector index (background) ────────────────
+    console.log('[APP] Initializing models...');
+    initModels(settings, overlayWin)
+      .then(async () => {
+        console.log('[APP] Models ready, generating embeddings...');
+        await generateEmbeddingsIfNeeded(db);
+        try {
+          loadVectorIndex(db);
+          log.info('Vector index ready');
+        } catch (e) {
+          log.warn('Vector index load failed:', e);
+        }
+      })
+      .catch((e) => {
+        log.error('Model init error:', e);
+      });
+
+    log.info('App ready');
+    console.log('[APP] Startup complete');
+  } catch (e) {
+    console.error('[APP] Initialization error:', e);
+    log.error('Initialization error:', e);
+    process.exit(1);
+  }
+}).catch((e) => {
+  console.error('[STARTUP] app.whenReady() rejected:', e);
+  process.exit(1);
 });
 
 // ── macOS re-activate ─────────────────────────────────────────────────────────
